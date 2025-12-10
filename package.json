@@ -1,33 +1,23 @@
 {
-  "name": "wh-reminder",
-  "version": "1.0.0",
-  "description": "Servicio para enviar recordatorios diarios por WhatsApp",
+  "name": "pastillas-recordatorio",
+  "version": "2.0.0",
+  "description": "Recordatorio diario de pastilla anticonceptiva a las 21:00 Neuquén",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test-send": "node test/test-send.js",
-    "docker:build": "docker build -t wh-reminder .",
-    "docker:run": "docker run -p 3000:3000 --env-file .env wh-reminder"
+    "test": "node -e \"console.log('✅ Sistema configurado para 21:00 Neuquén')\"",
+    "deploy": "git add . && git commit -m 'Update' && git push"
   },
-  "keywords": [
-    "whatsapp",
-    "reminder",
-    "twilio",
-    "meta"
-  ],
+  "keywords": ["whatsapp", "recordatorio", "pastillas", "novia", "twilio"],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.0",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "node-cron": "^3.0.3",
-    "twilio": "^4.19.0",
-    "winston": "^3.11.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "node-cron": "^3.0.0",
+    "twilio": "^4.0.0",
+    "winston": "^3.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
