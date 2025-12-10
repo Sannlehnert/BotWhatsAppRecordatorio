@@ -1,0 +1,25 @@
+# Archivos de Dependencias (Node.js)
+# ----------------------------------
+/node_modules
+/package-lock.json
+
+# Archivos de Entorno y Secretos
+# -----------------------------
+# ESTO ES CRÍTICO: Asegura que tus claves de Twilio no se suban.
+.env
+.env.*
+
+# Archivos de Build y Compilación
+# -------------------------------
+/dist
+/build
+/coverage
+
+# Archivos de Log y Consola
+# -------------------------
+*.log
+
+# Archivos del Sistema Operativo
+# ------------------------------
+.DS_Store
+Thumbs.db
