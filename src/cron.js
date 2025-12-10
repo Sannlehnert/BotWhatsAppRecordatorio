@@ -17,14 +17,11 @@ const HORA_UTC_PARA_21_NEUQUEN = '00'; // 00:00 UTC = 21:00 Neuquén (verano)
 const mensajes = [
   "Son las 21:00. ¡Recordatorio de tomar la antibebe! Te amo mucho ❤️",
   "Hora de la pastilla, mi amor. ¡No olvides tomarla! 💕",
-  "21:00 - Pastillita time 💊. Te amo ❤️",
-  "Recordatorio amoroso: pastilla anticonceptiva. ¡Cuídate, te amo! 😘",
-  "💖 Mi amor, son las 21:00. ¡Es hora de tu pastilla anticonceptiva!",
-  "¡Hora de la pastilla, mi vida! No te olvides, te amo ❤️",
+  "21:00 - Pastillita time xd 💊. Te amo ❤️",
+  "Recordatorio amoroso: pastilla anticonceptiva. ¡Cuídate, te amo!",
+  "💖 Mi amor, son las 21:00. ¡Es hora de la antibebe je!",
+  "LA PASTILLA, no te olvides, te amo ❤️",
   "⏰ Recordatorio amoroso: pastilla a las 21:00. ¡Te amo!",
-  "💕 Mi reina, hora de tomar tu pastilla. ¡Te cuidas por nosotros!",
-  "❤️‍🔥 Amor, son las 9PM. ¡Pastilla time! Cuídate por favor",
-  "⭐️ Para la mujer más importante: ¡Recordatorio de pastilla a las 21:00!"
 ];
 
 console.log('💖 RECORDATORIO DE PASTILLAS - CONFIGURADO');
