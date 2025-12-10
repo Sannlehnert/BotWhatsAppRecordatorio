@@ -1,7 +1,6 @@
 # Archivos de Dependencias (Node.js)
 # ----------------------------------
 /node_modules
-/package-lock.json
 
 # Archivos de Entorno y Secretos
 # -----------------------------

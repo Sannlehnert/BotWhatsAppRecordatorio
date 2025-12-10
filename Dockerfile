@@ -7,15 +7,15 @@ WORKDIR /app
 # Instalar dependencias del sistema necesarias
 RUN apk add --no-cache tzdata
 
-# Configurar timezone
+# Configurar timezone para Neuquén
 ENV TZ=America/Argentina/Salta
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Copiar package.json y package-lock.json
+# Copiar package.json
 COPY package*.json ./
 
-# Instalar dependencias de producción
-RUN npm ci --only=production
+# Instalar dependencias (usa npm install en lugar de npm ci)
+RUN npm install --production --omit=dev
 
 # Copiar código fuente
 COPY . .
@@ -34,4 +34,4 @@ CMD ["node", "src/index.js"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {if(r.statusCode!==200)throw new Error()})"
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
