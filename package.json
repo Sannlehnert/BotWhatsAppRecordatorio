@@ -1,15 +1,16 @@
 {
   "name": "pastillas-recordatorio",
-  "version": "2.0.0",
-  "description": "Recordatorio diario de pastilla anticonceptiva a las 21:00 Neuquén",
+  "version": "3.0.0",
+  "description": "Recordatorio diario de pastilla anticonceptiva - FIX Timezone",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node -e \"console.log('✅ Sistema configurado para 21:00 Neuquén')\"",
-    "deploy": "git add . && git commit -m 'Update' && git push"
+    "test": "node test/test-send.js",
+    "deploy": "git add . && git commit -m 'Update' && git push",
+    "railway:deploy": "railway up"
   },
-  "keywords": ["whatsapp", "recordatorio", "pastillas", "novia", "twilio"],
+  "keywords": ["whatsapp", "recordatorio", "pastillas", "timezone", "fix"],
   "author": "",
   "license": "MIT",
   "dependencies": {

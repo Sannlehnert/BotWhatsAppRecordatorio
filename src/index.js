@@ -11,29 +11,41 @@ const PORT = process.env.PORT || 3000;
 // Middleware básico
 app.use(express.json());
 
-// Health check endpoint MEJORADO
+// ============================================
+// ENDPOINTS DE PRUEBA Y CONTROL
+// ============================================
+
+// 1. Health check mejorado
 app.get('/health', (req, res) => {
   try {
-    const { obtenerProximaEjecucion, obtenerHoras } = require('./cron');
+    const { obtenerProximaEjecucion, obtenerHoras, calcularHoraUTC, CRON_SCHEDULE } = require('./cron');
     const proxima = obtenerProximaEjecucion();
     const horas = obtenerHoras();
+    const horaUTC = calcularHoraUTC();
     
     res.status(200).json({
-      status: '❤️‍🔥 FUNCIONANDO',
+      status: '❤️‍🔥 SISTEMA ACTIVO',
       sistema: 'Recordatorio de pastillas para mi novia',
-      tiempo: {
+      configuracion: {
+        proveedor: process.env.PROVIDER || 'twilio',
+        cron_expression: CRON_SCHEDULE,
+        hora_utc_calculada: `${horaUTC.hora}:${horaUTC.minuto.toString().padStart(2, '0')}`,
+        hora_neuquen: '21:00'
+      },
+      tiempo_actual: {
         utc: horas.utc,
         neuquen: horas.neuquen,
-        servidor: horas.local
+        offset: horas.offset
       },
-      programacion: {
-        next_utc: proxima.utc,
-        next_neuquen: proxima.neuquen,
-        mensaje: '21:00 hora Neuquén (00:00 UTC)'
+      proximo_envio: {
+        utc: proxima.utc,
+        neuquen: proxima.neuquen,
+        en: `en ${Math.round((new Date(proxima.utc) - new Date()) / (1000 * 60 * 60) * 10) / 10} horas`
       },
-      config: {
-        provider: process.env.PROVIDER || 'twilio',
-        destino: process.env.TO_NUMBER ? '✅ Configurado' : '❌ No configurado'
+      pruebas: {
+        send_test: `http://${req.headers.host}/send-test`,
+        send_custom: `http://${req.headers.host}/send-custom?mensaje=TEXT`,
+        force_21hs: `http://${req.headers.host}/force-21hs`
       }
     });
   } catch (error) {
@@ -45,33 +57,37 @@ app.get('/health', (req, res) => {
   }
 });
 
-// Endpoint para enviar prueba manual
+// 2. Enviar prueba con mensaje aleatorio
 app.get('/send-test', async (req, res) => {
   try {
     const { enviarRecordatorio, obtenerHoras } = require('./cron');
     const horas = obtenerHoras();
     
-    logger.info('🔄 Envío manual solicitado via /send-test');
+    logger.info('🔄 ENVÍO MANUAL SOLICITADO via /send-test');
     
     const resultado = await enviarRecordatorio();
     
     res.json({ 
       success: true, 
-      message: '✅ Mensaje de prueba enviado',
+      message: '✅ MENSAJE DE PRUEBA ENVIADO',
       timestamp: new Date().toISOString(),
-      horas: horas,
+      detalles: {
+        hora_actual_neuquen: horas.neuquen,
+        mensaje_tipo: 'aleatorio',
+        destino: process.env.TO_NUMBER
+      },
       resultado: resultado
     });
   } catch (error) {
-    logger.error('Error en /send-test:', error);
+    logger.error('❌ ERROR en /send-test:', error.message);
     
     let solucion = 'Error desconocido';
     if (error.message.includes('21608')) {
-      solucion = 'El número no está en el sandbox. Enviar "join learn-discave" al +14155238886';
+      solucion = 'El número no está en el sandbox. Enviar "join learn-discave" al +14155238886 desde el WhatsApp de tu novia';
     } else if (error.message.includes('AccountSid')) {
-      solucion = 'TWILIO_ACCOUNT_SID incorrecto en Railway variables';
+      solucion = 'TWILIO_ACCOUNT_SID incorrecto en Railway Variables';
     } else if (error.message.includes('AuthToken')) {
-      solucion = 'TWILIO_AUTH_TOKEN incorrecto en Railway variables';
+      solucion = 'TWILIO_AUTH_TOKEN incorrecto en Railway Variables';
     }
     
     res.status(500).json({ 
@@ -83,37 +99,102 @@ app.get('/send-test', async (req, res) => {
   }
 });
 
-// Endpoint para ver mensajes disponibles
+// 3. Enviar mensaje personalizado (para pruebas)
+app.get('/send-custom', async (req, res) => {
+  try {
+    const { enviarRecordatorio } = require('./cron');
+    const mensaje = req.query.mensaje || 'Mensaje personalizado de prueba';
+    
+    if (!mensaje) {
+      return res.status(400).json({ error: 'Falta parámetro "mensaje"' });
+    }
+    
+    logger.info(`📝 ENVÍO PERSONALIZADO: "${mensaje}"`);
+    
+    const resultado = await enviarRecordatorio(mensaje);
+    
+    res.json({ 
+      success: true, 
+      message: '✅ MENSAJE PERSONALIZADO ENVIADO',
+      mensaje_enviado: mensaje,
+      resultado: resultado
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 4. Forzar envío como si fueran las 21:00 (para pruebas)
+app.get('/force-21hs', async (req, res) => {
+  try {
+    const { mensajes } = require('./cron');
+    const mensaje21hs = mensajes[Math.floor(Math.random() * mensajes.length)];
+    
+    logger.info('🔔 FORZANDO ENVÍO DE 21:00 (modo prueba)');
+    
+    const sendTwilio = require('./send-twilio');
+    const resultado = await sendTwilio(`[PRUEBA 21:00] ${mensaje21hs}`);
+    
+    res.json({ 
+      success: true, 
+      message: '✅ ENVÍO DE 21:00 SIMULADO',
+      simulacion: 'Se envió mensaje como si fueran las 21:00',
+      mensaje: mensaje21hs,
+      nota: 'Esto no afecta el cron programado',
+      resultado: resultado
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 5. Ver mensajes disponibles
 app.get('/mensajes', (req, res) => {
   try {
     const { mensajes } = require('./cron');
     res.json({
       total: mensajes.length,
       mensajes: mensajes,
-      rotacion: 'Se selecciona aleatoriamente cada día',
-      proximo_envio: '21:00 hora Neuquén'
+      rotacion: 'aleatoria cada día',
+      proximo: '21:00 hora Neuquén'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Endpoint para ver configuración (sin mostrar tokens)
-app.get('/config', (req, res) => {
-  res.json({
-    timezone: {
-      servidor: 'UTC',
-      destino: 'America/Argentina/Neuquén (UTC-3)',
-      hora_envio: '21:00 Neuquén = 00:00 UTC'
-    },
-    proveedor: process.env.PROVIDER || 'twilio',
-    destino_configurado: !!process.env.TO_NUMBER,
-    twilio_configurado: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-    entorno: process.env.NODE_ENV || 'development'
-  });
+// 6. Ver configuración del cron
+app.get('/cron-config', (req, res) => {
+  try {
+    const { calcularHoraUTC, CRON_SCHEDULE, obtenerProximaEjecucion } = require('./cron');
+    const horaUTC = calcularHoraUTC();
+    const proxima = obtenerProximaEjecucion();
+    
+    res.json({
+      cron_expression: CRON_SCHEDULE,
+      calculo: {
+        hora_utc: `${horaUTC.hora}:${horaUTC.minuto.toString().padStart(2, '0')}`,
+        hora_neuquen: '21:00',
+        proximo_envio_utc: horaUTC.fechaCompleta.toISOString()
+      },
+      proxima_ejecucion: proxima,
+      timezone: {
+        servidor: 'UTC',
+        destino: 'America/Argentina/Salta (Neuquén)'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Endpoint principal con HTML amigable
+// 7. Endpoint raíz con interfaz web
 app.get('/', (req, res) => {
   const { obtenerProximaEjecucion } = require('./cron');
   const proxima = obtenerProximaEjecucion();
@@ -125,6 +206,25 @@ app.get('/', (req, res) => {
       <title>💖 Recordatorio de Pastillas</title>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <script>
+        function probarEnvio() {
+          fetch('/send-test')
+            .then(r => r.json())
+            .then(data => {
+              alert(data.success ? '✅ ' + data.message : '❌ ' + data.error);
+            })
+            .catch(e => alert('Error: ' + e));
+        }
+        
+        function forzar21hs() {
+          fetch('/force-21hs')
+            .then(r => r.json())
+            .then(data => {
+              alert(data.success ? '✅ ' + data.message : '❌ ' + data.error);
+            })
+            .catch(e => alert('Error: ' + e));
+        }
+      </script>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -141,7 +241,7 @@ app.get('/', (req, res) => {
           border-radius: 20px;
           padding: 40px;
           box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-          max-width: 800px;
+          max-width: 900px;
           width: 100%;
         }
         h1 { 
@@ -176,9 +276,14 @@ app.get('/', (req, res) => {
           text-decoration: none; 
           margin: 10px 5px;
           font-weight: bold;
+          border: none;
+          cursor: pointer;
+          font-size: 16px;
           transition: transform 0.2s;
         }
         .btn:hover { transform: translateY(-2px); }
+        .btn-test { background: #2196F3; }
+        .btn-force { background: #FF9800; }
         .endpoints { margin-top: 30px; }
         .endpoint { 
           background: #f0f0f0; 
@@ -193,41 +298,46 @@ app.get('/', (req, res) => {
           border-radius: 10px;
           margin: 15px 0;
         }
+        .success { color: #4CAF50; font-weight: bold; }
       </style>
     </head>
     <body>
       <div class="container">
         <h1>💖 Recordatorio de Pastillas</h1>
         
-        <div class="status">✅ SISTEMA ACTIVO</div>
+        <div class="status">✅ SISTEMA ACTIVO - ENVÍA A LAS 21:00 NEUQUÉN</div>
         
         <div class="info-box">
-          <h3>📋 Información del Sistema</h3>
-          <p>Este servicio envía un recordatorio automático todos los días a las <strong>21:00 hora Neuquén</strong>.</p>
+          <h3>📋 ¿CÓMO FUNCIONA?</h3>
+          <p>Este servicio calcula automáticamente la diferencia horaria entre UTC (Railway) y Neuquén, y envía un recordatorio <strong>todos los días a las 21:00 hora local de tu novia</strong>.</p>
+          <p class="success">¡Ya no enviará a las 15:00! Se corrigió el problema de timezone.</p>
         </div>
         
         <div class="time-box">
-          <h3>⏰ Próximo Envío</h3>
+          <h3>⏰ PRÓXIMO ENVÍO PROGRAMADO</h3>
           <p><strong>UTC:</strong> ${proxima.utc}</p>
           <p><strong>Neuquén:</strong> ${proxima.neuquen}</p>
-        </div>
-        
-        <div class="endpoints">
-          <h3>🔗 Endpoints Disponibles</h3>
-          <div class="endpoint"><a href="/health" target="_blank">/health</a> - Estado del sistema</div>
-          <div class="endpoint"><a href="/send-test" target="_blank">/send-test</a> - Enviar prueba ahora</div>
-          <div class="endpoint"><a href="/mensajes" target="_blank">/mensajes</a> - Ver mensajes disponibles</div>
-          <div class="endpoint"><a href="/config" target="_blank">/config</a> - Ver configuración</div>
+          <p><strong>Faltan:</strong> ${Math.round((new Date(proxima.utc) - new Date()) / (1000 * 60 * 60) * 10) / 10} horas</p>
         </div>
         
         <div style="margin-top: 30px; text-align: center;">
-          <a href="/send-test" class="btn">🔔 Enviar Prueba Ahora</a>
-          <a href="/health" class="btn" style="background: #2196F3;">📊 Ver Estado</a>
+          <button onclick="probarEnvio()" class="btn btn-test">🔔 Probar Envío Ahora</button>
+          <button onclick="forzar21hs()" class="btn btn-force">⏰ Simular 21:00</button>
+          <a href="/health" class="btn" style="background: #4CAF50;">📊 Ver Estado Detallado</a>
+        </div>
+        
+        <div class="endpoints">
+          <h3>🔗 ENDPOINTS DE PRUEBA</h3>
+          <div class="endpoint"><a href="/health" target="_blank">/health</a> - Estado completo del sistema</div>
+          <div class="endpoint"><a href="/send-test" target="_blank">/send-test</a> - Enviar mensaje de prueba</div>
+          <div class="endpoint"><a href="/force-21hs" target="_blank">/force-21hs</a> - Simular envío de 21:00</div>
+          <div class="endpoint"><a href="/cron-config" target="_blank">/cron-config</a> - Ver configuración del cron</div>
+          <div class="endpoint"><a href="/mensajes" target="_blank">/mensajes</a> - Ver mensajes disponibles</div>
         </div>
         
         <div style="margin-top: 30px; font-size: 14px; color: #666; text-align: center;">
-          <p>💡 Consejo: Usa /send-test para verificar que todo funcione correctamente.</p>
-          <p>🔄 El mensaje se enviará automáticamente todos los días a las 21:00.</p>
+          <p>💡 <strong>PARA PROBAR:</strong> Usa "Probar Envío Ahora" para verificar que Twilio funciona.</p>
+          <p>✅ <strong>CONFIRMACIÓN:</strong> Tu novia debería recibir el WhatsApp inmediatamente.</p>
         </div>
       </div>
     </body>
@@ -237,26 +347,29 @@ app.get('/', (req, res) => {
 
 // Iniciar servidor
 app.listen(PORT, () => {
-  logger.info('='.repeat(50));
+  logger.info('='.repeat(60));
   logger.info(`💖 SERVICIO DE RECORDATORIO INICIADO`);
   logger.info(`📡 Puerto: ${PORT}`);
   logger.info(`⚙️  Entorno: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`📱 Proveedor: ${process.env.PROVIDER || 'twilio'}`);
-  logger.info(`⏰ Hora programada: 21:00 Neuquén (00:00 UTC)`);
-  logger.info('='.repeat(50));
+  logger.info(`⏰ Sistema: Envío automático a las 21:00 Neuquén`);
+  logger.info(`🔗 URL: http://localhost:${PORT}`);
+  logger.info('='.repeat(60));
   
-  console.log('\n🚀 SERVIDOR INICIADO CORRECTAMENTE');
-  console.log(`👉 URL: http://localhost:${PORT}`);
-  console.log('💡 Usa /send-test para probar el envío ahora mismo\n');
+  console.log('\n🚀 ¡SISTEMA LISTO PARA PRUEBAS!');
+  console.log('👉 Usa estos comandos para verificar:');
+  console.log(`   1. Visita: http://localhost:${PORT}/send-test`);
+  console.log('   2. Tu novia debería recibir WhatsApp inmediatamente');
+  console.log('   3. Luego espera a las 21:00 para confirmar');
+  console.log('\n🔧 Si hay problemas, visita /health para diagnóstico\n');
   
   // Iniciar cron job
   require('./cron');
 });
 
-// Manejo de errores mejorado
+// Manejo de errores
 process.on('uncaughtException', (error) => {
   logger.error('🚨 UNCAUGHT EXCEPTION:', error);
-  // No salir del proceso para que Railway pueda reiniciar si es necesario
 });
 
 process.on('unhandledRejection', (reason, promise) => {

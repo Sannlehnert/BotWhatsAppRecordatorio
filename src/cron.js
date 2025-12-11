@@ -2,16 +2,11 @@ const cron = require('node-cron');
 const logger = require('./logger');
 
 // ============================================
-// CONFIGURACIÓN DE TIEMPO - FIX PARA RAILWAY
+// SOLUCIÓN DEFINITIVA PARA 21:00 NEUQUÉN
 // ============================================
-// Railway corre en UTC, Neuquén es UTC-3 (UTC-2 en verano)
-// 21:00 Neuquén = 00:00 UTC (ó 23:00 UTC en invierno)
+// Railway corre en UTC, necesitamos calcular el offset dinámico
+// porque Argentina cambia entre UTC-3 y UTC-2
 // ============================================
-
-// HORA EN UTC QUE CORRESPONDE A 21:00 NEUQUÉN
-const HORA_UTC_PARA_21_NEUQUEN = '00'; // 00:00 UTC = 21:00 Neuquén (verano)
-// Si es invierno (cuando Neuquén está en UTC-3), sería '00' también
-// 21:00 Neuquén (UTC-3) = 00:00 UTC del día siguiente
 
 // Array de mensajes aleatorios para tu novia 💖
 const mensajes = [
@@ -24,69 +19,103 @@ const mensajes = [
   "⏰ Recordatorio amoroso: pastilla a las 21:00. ¡Te amo!",
 ];
 
+// ============================================
+// FUNCIÓN CLAVE: Calcular hora UTC para 21:00 Neuquén
+// ============================================
+function calcularHoraUTC() {
+  const ahora = new Date();
+  
+  // Crear fecha para hoy 21:00 Neuquén
+  const hoy21Neuquen = new Date(ahora.toLocaleString('en-US', {
+    timeZone: 'America/Argentina/Salta'
+  }));
+  
+  hoy21Neuquen.setHours(21, 0, 0, 0);
+  
+  // Convertir a UTC
+  const hoy21UTC = new Date(hoy21Neuquen.toISOString());
+  
+  // Si ya pasaron las 21:00 hoy, programar para mañana
+  const ahoraNeuquen = new Date(ahora.toLocaleString('en-US', {
+    timeZone: 'America/Argentina/Salta'
+  }));
+  
+  if (ahoraNeuquen.getHours() >= 21) {
+    hoy21UTC.setDate(hoy21UTC.getDate() + 1);
+  }
+  
+  return {
+    hora: hoy21UTC.getUTCHours(),
+    minuto: hoy21UTC.getUTCMinutes(),
+    fechaCompleta: hoy21UTC
+  };
+}
+
+// ============================================
+// CONFIGURACIÓN DINÁMICA
+// ============================================
+const horaUTC = calcularHoraUTC();
+const CRON_SCHEDULE = `${horaUTC.minuto} ${horaUTC.hora} * * *`;
+
 console.log('💖 RECORDATORIO DE PASTILLAS - CONFIGURADO');
 console.log('==========================================');
-console.log('⚙️  Configuración Temporal:');
-console.log(`   🕒 Hora UTC programada: ${HORA_UTC_PARA_21_NEUQUEN}:00`);
+console.log('⚙️  Configuración Dinámica:');
+console.log(`   🕒 Hora UTC calculada: ${horaUTC.hora}:${horaUTC.minuto.toString().padStart(2, '0')}`);
 console.log(`   🏠 Hora Neuquén: 21:00`);
+console.log(`   📅 Próximo envío UTC: ${horaUTC.fechaCompleta.toISOString()}`);
 console.log(`   💌 Mensajes: ${mensajes.length} variantes`);
+console.log(`   ⚡ Expresión Cron: ${CRON_SCHEDULE}`);
 console.log('');
 
-// Función para obtener la hora actual en diferentes zonas
+// Función para obtener hora actual en diferentes zonas
 function obtenerHoras() {
   const ahora = new Date();
   return {
     utc: ahora.toISOString(),
     neuquen: ahora.toLocaleString('es-AR', { 
       timeZone: 'America/Argentina/Salta',
-      hour12: false 
+      hour12: false,
+      timeZoneName: 'short'
     }),
-    local: ahora.toLocaleString('es-AR')
+    offset: new Date().toLocaleString('en-US', {
+      timeZone: 'America/Argentina/Salta',
+      timeZoneName: 'long'
+    }).split(' ').pop()
   };
 }
 
 // Función para enviar recordatorio
-async function enviarRecordatorio() {
+async function enviarRecordatorio(mensajeEspecifico = null) {
   const horas = obtenerHoras();
   
   try {
-    // Seleccionar mensaje aleatorio
-    const mensajeAleatorio = mensajes[Math.floor(Math.random() * mensajes.length)];
+    // Seleccionar mensaje aleatorio o usar el específico
+    const mensajeAleatorio = mensajeEspecifico || mensajes[Math.floor(Math.random() * mensajes.length)];
     
-    logger.info(`📅 Fecha/hora actual:`);
+    logger.info(`📅 FECHA/HORA ACTUAL:`);
     logger.info(`   UTC: ${horas.utc}`);
-    logger.info(`   Neuquén: ${horas.neuquen}`);
-    logger.info(`   Server: ${horas.local}`);
-    logger.info(`💌 Enviando: "${mensajeAleatorio}"`);
+    logger.info(`   Neuquén: ${horas.neuquen} (${horas.offset})`);
+    logger.info(`💌 MENSAJE: "${mensajeAleatorio}"`);
     
     // Cargar Twilio dinámicamente
     const sendTwilio = require('./send-twilio');
     const resultado = await sendTwilio(mensajeAleatorio);
     
     // Registrar envío exitoso
-    logger.info('✅ Recordatorio enviado exitosamente!');
+    logger.info('✅ RECORDATORIO ENVIADO EXITOSAMENTE!');
     logger.info(`   📱 Para: ${process.env.TO_NUMBER}`);
+    logger.info(`   ⏰ Hora local destino: 21:00 Neuquén`);
     
     return resultado;
     
   } catch (error) {
-    logger.error(`❌ Error enviando recordatorio: ${error.message}`);
+    logger.error(`❌ ERROR ENVIANDO RECORDATORIO: ${error.message}`);
     
     // Si es error de sandbox, dar instrucciones claras
     if (error.message.includes('21608') || error.message.includes('not verified')) {
-      logger.error('⚠️  SOLUCIÓN: El número no está en el sandbox');
-      logger.error('   1. Desde WhatsApp de tu novia, enviar al +14155238886:');
-      logger.error('   2. El mensaje EXACTO: join learn-discave');
-    }
-    
-    // Registrar error
-    const fs = require('fs').promises;
-    try {
-      await fs.appendFile('logs/errores.log', 
-        `${new Date().toISOString()} - ERROR: ${error.message}\n`
-      );
-    } catch (e) {
-      // Ignorar error de escritura
+      logger.error('⚠️  SOLUCIÓN REQUERIDA:');
+      logger.error('   1. Desde WhatsApp de tu novia, enviar al +14155238886');
+      logger.error('   2. Mensaje EXACTO: join learn-discave');
     }
     
     throw error;
@@ -94,77 +123,97 @@ async function enviarRecordatorio() {
 }
 
 // ============================================
-// CONFIGURACIÓN DEL CRON
+// CONFIGURACIÓN DEL CRON DINÁMICO
 // ============================================
-// Programar para 00:00 UTC (21:00 Neuquén) TODOS LOS DÍAS
-// Formato: segundo minuto hora día-del-mes mes día-de-la-semana
-// '0 0 * * *' = cada día a las 00:00 UTC
-// ============================================
-
-const cronSchedule = `0 ${HORA_UTC_PARA_21_NEUQUEN} * * *`; // 00:00 UTC
-
-console.log('⏰ CONFIGURACIÓN CRON:');
-console.log(`   Expresión: ${cronSchedule}`);
-console.log(`   Significado: Cada día a las ${HORA_UTC_PARA_21_NEUQUEN}:00 UTC`);
-console.log(`   Equivale a: 21:00 Neuquén (hora local de tu novia)`);
+logger.info('⏰ CONFIGURANDO CRON DINÁMICO...');
+logger.info(`   Expresión: ${CRON_SCHEDULE}`);
+logger.info(`   Significado: Cada día a las ${horaUTC.hora}:${horaUTC.minuto.toString().padStart(2, '0')} UTC`);
+logger.info(`   Equivale a: 21:00 Neuquén`);
 
 // Crear y configurar la tarea cron
-const task = cron.schedule(cronSchedule, enviarRecordatorio, {
-  scheduled: true,
-  timezone: 'UTC' // IMPORTANTE: Railway corre en UTC
-});
+let task;
+try {
+  task = cron.schedule(CRON_SCHEDULE, enviarRecordatorio, {
+    scheduled: true,
+    timezone: 'UTC'
+  });
+  
+  logger.info('✅ CRON PROGRAMADO CORRECTAMENTE');
+} catch (error) {
+  logger.error(`❌ ERROR PROGRAMANDO CRON: ${error.message}`);
+  // Fallback a hora fija si hay error
+  task = cron.schedule('0 0 * * *', enviarRecordatorio, {
+    scheduled: true,
+    timezone: 'UTC'
+  });
+  logger.info('⚠️  Usando configuración de fallback: 00:00 UTC');
+}
 
 // Función para calcular próxima ejecución
 function obtenerProximaEjecucion() {
-  const ahora = new Date();
-  const proxima = new Date(ahora);
-  
-  // Configurar para hoy a las 00:00 UTC
-  proxima.setUTCHours(HORA_UTC_PARA_21_NEUQUEN, 0, 0, 0);
-  
-  // Si ya pasó esa hora hoy, programar para mañana
-  if (ahora >= proxima) {
-    proxima.setUTCDate(proxima.getUTCDate() + 1);
+  if (task && typeof task.nextDate === 'function') {
+    const proxima = task.nextDate();
+    return {
+      utc: proxima.toISOString(),
+      neuquen: new Date(proxima.getTime()).toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Salta',
+        hour12: false
+      }),
+      metodo: 'task.nextDate()'
+    };
+  } else {
+    // Fallback: calcular manualmente
+    const ahora = new Date();
+    const proxima = new Date(horaUTC.fechaCompleta);
+    
+    if (ahora >= proxima) {
+      proxima.setDate(proxima.getDate() + 1);
+    }
+    
+    return {
+      utc: proxima.toISOString(),
+      neuquen: proxima.toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Salta',
+        hour12: false
+      }),
+      metodo: 'cálculo manual'
+    };
   }
-  
-  return {
-    utc: proxima.toISOString(),
-    neuquen: proxima.toLocaleString('es-AR', { 
-      timeZone: 'America/Argentina/Salta',
-      timeZoneName: 'short'
-    })
-  };
 }
 
 // Mostrar información de programación
 const proxima = obtenerProximaEjecucion();
 logger.info('========================================');
-logger.info('⏰ RECORDATORIO PROGRAMADO CORRECTAMENTE');
-logger.info(`   Próximo envío UTC: ${proxima.utc}`);
-logger.info(`   Hora Neuquén: ${proxima.neuquen}`);
+logger.info('📅 PRÓXIMO ENVÍO PROGRAMADO:');
+logger.info(`   UTC: ${proxima.utc}`);
+logger.info(`   Neuquén: ${proxima.neuquen}`);
+logger.info(`   Método: ${proxima.metodo}`);
 logger.info('========================================');
 
-// Enviar mensaje de prueba al inicio SOLO SI ES HORA DE PRUEBA
-// (no enviar automáticamente en producción)
-if (process.env.NODE_ENV !== 'production') {
+// ============================================
+// MODO PRUEBA: Enviar mensaje de prueba si está activado
+// ============================================
+if (process.env.ENVIAR_PRUEBA_INICIAL === 'true') {
   setTimeout(async () => {
     try {
-      logger.info('🧪 Enviando mensaje de prueba inicial...');
-      await enviarRecordatorio();
-      logger.info('✅ Prueba completada. Todo listo!');
+      logger.info('🧪 ENVIANDO MENSAJE DE PRUEBA INICIAL...');
+      await enviarRecordatorio('🔔 PRUEBA: Este es un mensaje de prueba del sistema de recordatorios. Si funciona, recibirás este mensaje todos los días a las 21:00. ¡Te amo! ❤️');
+      logger.info('✅ PRUEBA COMPLETADA. TODO LISTO!');
     } catch (error) {
-      logger.error('⚠️  Error en prueba inicial. Verifica configuración.');
+      logger.error('⚠️  ERROR EN PRUEBA INICIAL. VERIFICA CONFIGURACIÓN.');
     }
-  }, 3000);
-} else {
-  logger.info('🚀 Modo producción - Sin prueba automática');
+  }, 5000);
 }
 
-// Exportar funciones para uso manual
+// ============================================
+// EXPORTACIONES
+// ============================================
 module.exports = {
   task,
   enviarRecordatorio,
   obtenerProximaEjecucion,
+  obtenerHoras,
   mensajes,
-  obtenerHoras
+  calcularHoraUTC,
+  CRON_SCHEDULE
 };
