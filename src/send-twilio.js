@@ -60,7 +60,7 @@ async function sendTwilioMessage(message = null) {
       logger.error('   El número destino no está verificado en el sandbox');
       logger.error('   Pasos para solucionar:');
       logger.error('   1. Desde el WhatsApp de tu novia, enviar mensaje a: +14155238886');
-      logger.error('   2. Contenido EXACTO: join learn-discave');
+      logger.error('   2. Contenido EXACTO: join learn-disease');
       logger.error('   3. Esperar confirmación: "You\'re ready to send and receive messages!"');
     } else if (error.code === 21211) {
       logger.error('⚠️  Número de teléfono inválido');

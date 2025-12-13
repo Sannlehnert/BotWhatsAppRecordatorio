@@ -134,8 +134,7 @@ logger.info(`   Equivale a: 21:00 Neuquén`);
 let task;
 try {
   task = cron.schedule(CRON_SCHEDULE, enviarRecordatorio, {
-    scheduled: true,
-    timezone: 'UTC'
+    scheduled: true
   });
   
   logger.info('✅ CRON PROGRAMADO CORRECTAMENTE');
@@ -143,8 +142,7 @@ try {
   logger.error(`❌ ERROR PROGRAMANDO CRON: ${error.message}`);
   // Fallback a hora fija si hay error
   task = cron.schedule('0 0 * * *', enviarRecordatorio, {
-    scheduled: true,
-    timezone: 'UTC'
+    scheduled: true
   });
   logger.info('⚠️  Usando configuración de fallback: 00:00 UTC');
 }
